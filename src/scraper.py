@@ -12,8 +12,8 @@ import os
 # --- CONFIGURATION ---
 BASE_URL = "https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=060&bs=040&ta=27&sc=27128&sc=27102&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1"
 DATA_DIR = "../data"
-OUTPUT_FILE = os.path.join(DATA_DIR, "osaka_listings.csv")
-CACHE_FILE = os.path.join(DATA_DIR, "address_cache.csv")
+OUTPUT_FILE = os.path.join(DATA_DIR, "OsakaRent/osaka_listings.csv")
+CACHE_FILE = os.path.join(DATA_DIR, "OsakaRent/address_cache.csv")
 
 # Rotate these to avoid detection
 USER_AGENTS = [
