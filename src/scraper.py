@@ -9,13 +9,23 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 import os
 
-# --- CONFIGURATION ---
-BASE_URL = "https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=060&bs=040&ta=27&sc=27128&sc=27102&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1"
-DATA_DIR = "../data"
-OUTPUT_FILE = os.path.join(DATA_DIR, "OsakaRent/osaka_listings.csv")
-CACHE_FILE = os.path.join(DATA_DIR, "OsakaRent/address_cache.csv")
+# --- PATH CONFIGURATION (FIXED) ---
+# 1. Get the absolute path of this script (src/scraper.py)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 2. Go up one level to get the Project Root (OsakaRent/)
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+# 3. Define the Data Directory inside the project (OsakaRent/data)
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-# Rotate these to avoid detection
+OUTPUT_FILE = os.path.join(DATA_DIR, "osaka_listings.csv")
+CACHE_FILE = os.path.join(DATA_DIR, "address_cache.csv")
+
+# Make sure the directory exists
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# --- SCRAPER CONFIG ---
+BASE_URL = "https://suumo.jp/jj/chintai/ichiran/FR301FC001/?ar=060&bs=040&ta=27&sc=27128&sc=27102&cb=0.0&ct=9999999&et=9999999&cn=9999999&mb=0&mt=9999999&shkr1=03&shkr2=03&shkr3=03&shkr4=03&fw2=&srch_navi=1"
+
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -53,8 +63,6 @@ def save_cache(cache_dict):
     df.to_csv(CACHE_FILE)
 
 def run_osaka_miner(max_pages=5, status_placeholder=None, progress_bar=None):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    
     # 1. SCRAPING PHASE
     data = []
     if status_placeholder: status_placeholder.info(f"⛏️  Initializing Deep Scrape ({max_pages} Pages)...")
@@ -64,15 +72,14 @@ def run_osaka_miner(max_pages=5, status_placeholder=None, progress_bar=None):
         
         # UI Feedback
         if status_placeholder: status_placeholder.text(f"Scanning Page {page}/{max_pages}...")
-        if progress_bar: progress_bar.progress((page / max_pages) * 0.4) # 0% to 40%
+        if progress_bar: progress_bar.progress((page / max_pages) * 0.4) 
         
         try:
-            time.sleep(random.uniform(2, 5)) # Respectful delay
+            time.sleep(random.uniform(2, 5))
             res = requests.get(url, headers=get_header(), timeout=20)
             res.encoding = res.apparent_encoding
             
             if res.status_code != 200:
-                print(f"Blocked on page {page}. Waiting 10s...")
                 time.sleep(10)
                 continue
 
@@ -80,7 +87,6 @@ def run_osaka_miner(max_pages=5, status_placeholder=None, progress_bar=None):
             items = soup.find_all('div', class_='cassetteitem')
 
             for item in items:
-                # Building Data
                 try:
                     name = normalize_japanese(item.find('div', class_='cassetteitem_content-title').text)
                     address = normalize_japanese(item.find('li', class_='cassetteitem_detail-col1').text)
@@ -91,7 +97,6 @@ def run_osaka_miner(max_pages=5, status_placeholder=None, progress_bar=None):
                         age = int(age_match.group(1)) if age_match else 0
                 except: continue
 
-                # Unit Data
                 tbody = item.find('table', class_='cassetteitem_other')
                 if not tbody: continue
                 
@@ -100,7 +105,6 @@ def run_osaka_miner(max_pages=5, status_placeholder=None, progress_bar=None):
                     if len(tds) < 9: continue
                     
                     try:
-                        # Parsing logic
                         img_tag = tds[1].find('img')
                         img_url = img_tag.get('rel') if img_tag and img_tag.get('rel') else (img_tag.get('src') if img_tag else "")
                         
@@ -129,55 +133,39 @@ def run_osaka_miner(max_pages=5, status_placeholder=None, progress_bar=None):
         except Exception as e:
             print(f"Error page {page}: {e}")
 
-    # 2. GEOCODING PHASE (UNLIMITED + CACHED)
+    # 2. GEOCODING PHASE
     df = pd.DataFrame(data)
     if df.empty: return df
 
-    # Save raw first
     df.to_csv(OUTPUT_FILE, index=False)
     
     unique_addresses = df['address'].unique()
     cache = load_cache()
     
-    # Initialize Geocoder
     geolocator = Nominatim(user_agent=f"osaka_pro_miner_{random.randint(10000,99999)}")
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1.2) # REQUIRED for reliability
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1.2)
     
     total_addr = len(unique_addresses)
-    
-    if status_placeholder: 
-        status_placeholder.info(f"🗺️  Mapping {total_addr} locations. This allows for precision analytics.")
+    if status_placeholder: status_placeholder.info(f"🗺️  Mapping {total_addr} locations...")
 
     new_cache_entries = 0
     
     for i, addr in enumerate(unique_addresses):
-        # Update Progress (40% to 100%)
-        if progress_bar:
-            progress = 0.4 + (i / total_addr) * 0.6
-            progress_bar.progress(progress)
+        if progress_bar: progress_bar.progress(0.4 + (i / total_addr) * 0.6)
 
-        # Check Cache First
-        if addr in cache:
-            continue # Already have it
+        if addr in cache: continue
         
-        # If not in cache, fetch it
         try:
             query = f"Osaka, {addr}" if "大阪" not in addr else addr
             loc = geocode(query)
             if loc:
                 cache[addr] = {'lat': loc.latitude, 'lon': loc.longitude}
                 new_cache_entries += 1
-                # Save periodically
-                if new_cache_entries % 10 == 0:
-                    save_cache(cache)
-        except Exception as e:
-            print(f"Geocode fail {addr}: {e}")
+                if new_cache_entries % 10 == 0: save_cache(cache)
+        except: pass
 
-    # Save final cache
-    if new_cache_entries > 0:
-        save_cache(cache)
+    if new_cache_entries > 0: save_cache(cache)
 
-    # Map addresses to lat/lon
     df['lat'] = df['address'].map(lambda x: cache.get(x, {}).get('lat', None))
     df['lon'] = df['address'].map(lambda x: cache.get(x, {}).get('lon', None))
     

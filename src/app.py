@@ -18,62 +18,43 @@ st.set_page_config(
 # --- CSS: DARK MODE, CARD SEPARATION & HIGH CONTRAST ---
 st.markdown("""
 <style>
-    /* 1. Global Background Reset */
-    .stApp {
-        background-color: #0e1117; /* Pitch black background for the page */
-    }
+    /* 1. Global Background */
+    .stApp { background-color: #0e1117; }
 
-    /* 2. CARD STYLING (The fix for white spaces) */
-    /* Target the container with border (st.container(border=True)) */
+    /* 2. CARD STYLING */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #151921; /* Deep Charcoal Card Background */
-        border: 1px solid #30333F; /* Subtle border */
+        background-color: #151921;
+        border: 1px solid #30333F;
         border-radius: 10px;
         padding: 20px;
-        margin-bottom: 15px; /* Space between cards */
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Lift it off the page */
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     }
-    
-    /* Remove default Streamlit gaps inside the card */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        gap: 0.5rem;
-    }
+    div[data-testid="stVerticalBlockBorderWrapper"] > div { gap: 0.5rem; }
 
-    /* 3. Typography & Compactness */
+    /* 3. Typography */
     h1, h3 { padding-top: 0rem; padding-bottom: 0rem; }
-    div[data-testid="stExpander"] div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
-
+    
     /* 4. Image Sizing */
-    img { 
-        height: 180px; 
-        object-fit: cover; 
-        width: 100%; 
-        border-radius: 6px; 
-        border: 1px solid #333;
-    }
+    img { height: 180px; object-fit: cover; width: 100%; border-radius: 6px; border: 1px solid #333; }
     
     /* 5. Custom Tags */
     .tag { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-right: 5px; margin-bottom: 5px;}
-    .tag-green { background: #0f3d24; color: #66ff99; border: 1px solid #1a5c35; } /* Neon Green on Dark */
-    .tag-red { background: #3d0f0f; color: #ff6666; border: 1px solid #5c1a1a; } /* Neon Red on Dark */
-    .tag-blue { background: #0f243d; color: #66b3ff; border: 1px solid #1a355c; } /* Neon Blue on Dark */
+    .tag-green { background: #0f3d24; color: #66ff99; border: 1px solid #1a5c35; }
+    .tag-red { background: #3d0f0f; color: #ff6666; border: 1px solid #5c1a1a; }
+    .tag-blue { background: #0f243d; color: #66b3ff; border: 1px solid #1a355c; }
     
-    /* 6. Button Styling */
-    .stButton button { 
-        width: 100%; 
-        background-color: #262730; 
-        color: white; 
-        border: 1px solid #444;
-    }
-    .stButton button:hover {
-        border-color: #00ff00;
-        color: #00ff00;
-    }
+    /* 6. Buttons */
+    .stButton button { width: 100%; background-color: #262730; color: white; border: 1px solid #444; }
+    .stButton button:hover { border-color: #00ff00; color: #00ff00; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- DATA LOADER ---
-DATA_PATH = "../data/osaka_listings.csv"
+# --- PATH FIX ---
+# Calculate path relative to this script
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DATA_PATH = os.path.join(PROJECT_ROOT, "data", "osaka_listings.csv")
 
 @st.cache_data
 def load_data():
@@ -88,27 +69,23 @@ with c_title:
     st.title("🏯 Osaka Arbitrage Engine")
     st.caption("Advanced Real Estate Analytics & Mining System")
 
-# KPIs at the top
 if not df.empty:
     with c_kpi1: st.metric("Total Assets", len(df))
     with c_kpi2: st.metric("Avg Rent", f"¥{int(df['total_rent'].mean()):,}")
     with c_kpi3: st.metric("Mapped", len(df.dropna(subset=['lat'])))
 
 # =========================================================
-# 1. HIGH-DENSITY CONTROL PANEL
+# 1. CONTROL PANEL
 # =========================================================
 with st.expander("🎛️  SYSTEM CONTROLS & FILTERS", expanded=True):
-    
-    # --- ROW 1: MINING OPERATIONS ---
     col_mine, col_filter1, col_filter2, col_filter3 = st.columns([1.5, 1.5, 1.5, 1.5])
     
     with col_mine:
         st.markdown("**⛏️ Data Mining**")
-        pages_scan = st.slider("Scan Depth (Pages)", 1, 50, 2, help="50 pages ≈ 1 hour of processing (Geocoding)")
+        pages_scan = st.slider("Scan Depth (Pages)", 1, 50, 2)
         if st.button("🔴 EXECUTE MINER"):
             status_box = st.empty()
             prog_bar = st.progress(0)
-            
             try:
                 with st.spinner("Connecting to Japan Residential Database..."):
                     new_df = run_osaka_miner(max_pages=pages_scan, status_placeholder=status_box, progress_bar=prog_bar)
@@ -119,7 +96,6 @@ with st.expander("🎛️  SYSTEM CONTROLS & FILTERS", expanded=True):
                 st.error(f"Critical Failure: {e}")
 
     if not df.empty:
-        # --- ROW 1 CONT: FILTERS ---
         with col_filter1:
             st.markdown("**💴 Financials**")
             min_r, max_r = int(df['total_rent'].min()), int(df['total_rent'].max())
@@ -144,7 +120,6 @@ with st.expander("🎛️  SYSTEM CONTROLS & FILTERS", expanded=True):
 if df.empty:
     st.info("System Idle. Initialize Miner to begin data ingestion.")
 else:
-    # --- FILTER LOGIC ---
     mask = (
         (df['total_rent'].between(rent_range[0], rent_range[1])) &
         (df['size_m2'].between(size_range[0], size_range[1])) &
@@ -160,11 +135,9 @@ else:
     if df_filtered.empty:
         st.warning("No assets match criteria.")
     else:
-        # --- XGBOOST VALUATION ---
         df_filtered['layout_code'] = df_filtered['layout'].astype('category').cat.codes
         features = ['size_m2', 'age', 'floor', 'layout_code']
         target = 'total_rent'
-        
         ml_df = df_filtered.dropna(subset=features + [target])
         
         if len(ml_df) > 5:
@@ -177,28 +150,20 @@ else:
                 if row['residual'] < -5000: return "Undervalued"
                 if row['residual'] > 5000: return "Overpriced"
                 return "Fair Value"
-            
             df_filtered['status'] = df_filtered.apply(get_status, axis=1)
 
-        # --- VIEW TABS ---
         t_list, t_map, t_raw = st.tabs(["📋 List View", "🗺️ Full Map", "💾 Data Export"])
 
         # --- TAB 1: LIST ---
         with t_list:
-            # Pagination
             ITEMS = 12
             if 'page' not in st.session_state: st.session_state.page = 0
             
-            # Sorting
             sort_opt = st.selectbox("Sort By", ["Best Deal (Arbitrage)", "Cheapest Rent", "Largest Size"], index=0)
-            if sort_opt == "Best Deal (Arbitrage)":
-                df_view = df_filtered.sort_values('residual', ascending=True)
-            elif sort_opt == "Cheapest Rent":
-                df_view = df_filtered.sort_values('total_rent', ascending=True)
-            else:
-                df_view = df_filtered.sort_values('size_m2', ascending=False)
+            if sort_opt == "Best Deal (Arbitrage)": df_view = df_filtered.sort_values('residual', ascending=True)
+            elif sort_opt == "Cheapest Rent": df_view = df_filtered.sort_values('total_rent', ascending=True)
+            else: df_view = df_filtered.sort_values('size_m2', ascending=False)
             
-            # Slice
             max_p = max(1, (len(df_view) // ITEMS) + 1)
             if st.session_state.page >= max_p: st.session_state.page = max_p - 1
             if st.session_state.page < 0: st.session_state.page = 0
@@ -208,67 +173,42 @@ else:
             
             st.markdown(f"**Showing {start+1}-{min(start+ITEMS, len(df_view))} of {len(df_view)}**")
             
-            # Render Grid
             for _, row in page_df.iterrows():
-                # CRITICAL CHANGE: We use st.container(border=True) which our CSS targets
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([1.2, 2.5, 1.5, 1])
-                    
                     with c1:
-                        if pd.notna(row.get('image_url')) and row['image_url']:
-                            st.image(row['image_url'])
-                        else:
-                            st.markdown('<div style="height:160px; background:#333; color:#777; display:flex; align-items:center; justify-content:center; border-radius:4px;">No IMG</div>', unsafe_allow_html=True)
-                            
+                        if pd.notna(row.get('image_url')) and row['image_url']: st.image(row['image_url'])
+                        else: st.markdown('<div style="height:160px; background:#333; color:#777; display:flex; align-items:center; justify-content:center; border-radius:4px;">No IMG</div>', unsafe_allow_html=True)
                     with c2:
                         st.subheader(row['name'])
                         st.caption(f"📍 {row['address']}")
-                        
-                        # Tags
                         tags_html = ""
                         status = row.get('status')
-                        if status == "Undervalued":
-                            tags_html += f"<span class='tag tag-green'>💎 Save ¥{int(row['residual']*-1):,}</span>"
-                        elif status == "Overpriced":
-                            tags_html += "<span class='tag tag-red'>Overpriced</span>"
-                        
+                        if status == "Undervalued": tags_html += f"<span class='tag tag-green'>💎 Save ¥{int(row['residual']*-1):,}</span>"
+                        elif status == "Overpriced": tags_html += "<span class='tag tag-red'>Overpriced</span>"
                         if row['size_m2'] > 50: tags_html += "<span class='tag tag-blue'>Large</span>"
                         st.markdown(tags_html, unsafe_allow_html=True)
-                        
                         st.write(f"**{row['layout']}** | {row['size_m2']}m² | {row['floor']}F | {row['age']} yrs")
-                        
                     with c3:
                         st.metric("Rent", f"¥{int(row['total_rent']):,}")
                         if 'residual' in row:
                             val = int(row['residual']) * -1
                             st.metric("Arbitrage", f"¥{val:,}", delta=val)
-                            
                     with c4:
                         st.write("")
                         st.link_button("View ↗", row['link'])
 
-            # Controls
             b1, _, b2 = st.columns([1, 4, 1])
-            if b1.button("⬅️ Prev"):
-                st.session_state.page -= 1
-                st.rerun()
-            if b2.button("Next ➡️"):
-                st.session_state.page += 1
-                st.rerun()
+            if b1.button("⬅️ Prev"): st.session_state.page -= 1; st.rerun()
+            if b2.button("Next ➡️"): st.session_state.page += 1; st.rerun()
 
-        # --- TAB 2: FULL MAP (UNLIMITED) ---
+        # --- TAB 2: MAP ---
         with t_map:
             map_data = df_filtered.dropna(subset=['lat', 'lon'])
-            if map_data.empty:
-                st.warning("No geospatial data. Run the miner to populate coordinates.")
+            if map_data.empty: st.warning("No geospatial data.")
             else:
-                st.write(f"Mapping {len(map_data)} assets across Osaka.")
-                
-                # Center on Data
                 center = [map_data['lat'].mean(), map_data['lon'].mean()]
                 m = folium.Map(location=center, zoom_start=12, tiles="CartoDB dark_matter")
-                
-                # Marker Cluster
                 from folium.plugins import MarkerCluster
                 marker_cluster = MarkerCluster().add_to(m)
                 
@@ -276,7 +216,6 @@ else:
                     status = row.get('status', 'N/A')
                     color = "green" if status == "Undervalued" else "red" if status == "Overpriced" else "gray"
                     
-                    # Popup Link
                     popup_html = f"""
                     <div style="font-family:sans-serif; width:220px; color: black;">
                         <b>{row['name']}</b><br>
@@ -286,23 +225,16 @@ else:
                         <a href="{row['link']}" target="_blank">View Listing</a>
                     </div>
                     """
-                    
-                    # --- FIXED BLIP DETAILS ---
-                    # Tooltip now shows much more than just price
                     tooltip_text = f"{row['name']} | ¥{int(row['total_rent']):,} | {status}"
                     
                     folium.CircleMarker(
                         location=[row['lat'], row['lon']],
                         radius=5, color=color, fill=True, fill_color=color, fill_opacity=0.8,
-                        popup=popup_html,
-                        tooltip=tooltip_text 
+                        popup=popup_html, tooltip=tooltip_text 
                     ).add_to(marker_cluster)
-                
                 st_folium(m, height=700, use_container_width=True)
 
-        # --- TAB 3: EXPORT ---
         with t_raw:
             st.markdown("### 💾 Export Data")
-            st.write("Download the full dataset for Excel/Python analysis.")
             csv = df_filtered.to_csv(index=False).encode('utf-8')
             st.download_button("Download CSV", data=csv, file_name="osaka_arbitrage_data.csv", mime="text/csv")
